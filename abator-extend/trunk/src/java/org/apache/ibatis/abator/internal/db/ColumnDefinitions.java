@@ -16,12 +16,14 @@
 package org.apache.ibatis.abator.internal.db;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
 /**
  * This class holds the results of introspecting the database table.
- * 
+ * EXTEND: 增加了外键foreignKeysColumns, 唯一索引uniqueIndicesColumns, 非唯一索引nonUniqueIndicesColumns (charr 2008-08-22)
  * @author Jeff Butler
  */
 public class ColumnDefinitions {
@@ -31,13 +33,140 @@ public class ColumnDefinitions {
     private List blobColumns;
     private boolean hasJDBCDateColumns;
     private boolean hasJDBCTimeColumns;
+    
+    private List foreignKeysColumns;
+    private List uniqueIndicesColumns;
+    private List nonUniqueIndicesColumns;
 
 	public ColumnDefinitions() {
 		super();
 		primaryKeyColumns = new ArrayList();
         baseColumns = new ArrayList();
         blobColumns = new ArrayList();
+        
+        foreignKeysColumns = new ArrayList();
+        uniqueIndicesColumns = new ArrayList();
+        nonUniqueIndicesColumns = new ArrayList();
 	}
+	
+	public void addForeignKey(List fk){
+//		System.out.println("============ add foreign key for " + fk.size() + " columns.");
+
+		/** 检查是否是主键，检查是否是索引（唯一和不唯一） */
+		List primaryKeyColumnNameList = getColumnNameListFromCDList(primaryKeyColumns);
+		if(isListContentEquals(fk, primaryKeyColumnNameList)){
+			System.out.println("-------------和主键一致的外键，丢弃");
+			return;
+		}
+		Iterator iter = uniqueIndicesColumns.iterator();
+		while(iter.hasNext()){
+			List uiColumnNameList = getColumnNameListFromCDList((List)iter.next());
+			if(isListContentEquals(fk, uiColumnNameList)){
+				System.out.println("-------------和唯一索引一致的外键，丢弃");
+				return;
+			}
+		}
+		iter = nonUniqueIndicesColumns.iterator();
+		while(iter.hasNext()){
+			List nuiColumnNameList = getColumnNameListFromCDList((List)iter.next());
+			if(isListContentEquals(fk, nuiColumnNameList)){
+				System.out.println("-------------和非唯一索引一致的外键，丢弃");
+				return;
+			}
+		}
+
+		List cdList = new ArrayList();
+		iter = fk.iterator();
+		while(iter.hasNext()){
+			String cname = (String)iter.next();
+			ColumnDefinition cd = getColumn(cname);
+			if(cd != null)
+				cdList.add(cd);
+		}
+		
+		foreignKeysColumns.add(cdList);
+	}
+	public void addUniqueIndex(List index){
+//		System.out.println("============ add unique index for " + index.size() + " columns.");
+
+		/** 检查是否是主键 */
+		List primaryKeyColumnNameList = getColumnNameListFromCDList(primaryKeyColumns);
+		if(isListContentEquals(index, primaryKeyColumnNameList)){
+			System.out.println("-------------和主键一致的索引，丢弃");
+			return;
+		}
+		
+		List cdList = new ArrayList();
+		Iterator iter = index.iterator();
+		while(iter.hasNext()){
+			String cname = (String)iter.next();
+			ColumnDefinition cd = getColumn(cname);
+			if(cd != null)
+				cdList.add(cd);
+		}
+		
+		uniqueIndicesColumns.add(cdList);
+	}
+	public void addNonUniqueIndex(List index){
+//		System.out.println("============ add nonunique index for " + index.size() + " columns.");
+
+		List cdList = new ArrayList();
+		Iterator iter = index.iterator();
+		while(iter.hasNext()){
+			String cname = (String)iter.next();
+			ColumnDefinition cd = getColumn(cname);
+			if(cd != null)
+				cdList.add(cd);
+		}
+		
+		nonUniqueIndicesColumns.add(cdList);
+	}
+	private List getColumnNameListFromCDList(List cdList){
+		List nameList = new ArrayList();
+		Iterator iter = cdList.iterator();
+		while(iter.hasNext()){
+			ColumnDefinition cd = (ColumnDefinition)iter.next();
+			nameList.add(cd.getActualColumnName());
+		}
+		Collections.sort(nameList);
+		return nameList;
+	}
+	private boolean isListContentEquals(List a, List b){
+		if(a == null && b == null)
+			return true;
+		if(a == null || b == null)
+			return false;
+		
+		Collections.sort(a);
+		Collections.sort(b);
+		if(a.size() != b.size())
+			return false;
+		Iterator ia = a.iterator();
+		Iterator ib = b.iterator();
+		while(ia.hasNext() && ib.hasNext()){
+			Object oa = ia.next();
+			Object ob = ib.next();
+			if(!oa.equals(ob))
+				return false;
+		}
+		if(ia.hasNext() || ib.hasNext())
+			return false;
+		return true;
+	}
+	
+	public List getForeignKeysColumns() {
+		return foreignKeysColumns;
+	}
+
+	public List getUniqueIndicesColumns() {
+		return uniqueIndicesColumns;
+	}
+
+	public List getNonUniqueIndicesColumns() {
+		return nonUniqueIndicesColumns;
+	}
+
+
 
 	public List getBLOBColumns() {
         return blobColumns;

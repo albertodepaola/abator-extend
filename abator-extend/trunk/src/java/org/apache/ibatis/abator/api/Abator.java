@@ -149,6 +149,8 @@ public class Abator {
      * progress can be provided and the method can be cancelled through the ProgressCallback
      * interface.
      * 
+     * READING:生成器主函数（获取文件模型并写入到文件）(charr 20080823)
+     * 
      * @param callback an instance of the ProgressCallback interface, or <code>null</code>
      *   if you do not require progress information
      * @param contextIds a set of Strings containing context ids to run.  Only the
@@ -205,6 +207,7 @@ public class Abator {
         while (iter.hasNext()) {
             AbatorContext abatorContext = (AbatorContext) iter.next();
 
+            /** READING: 生成Java文件和Xml文件的文件模型 (charr 20080823) */
             abatorContext.generateFiles(callback, generatedJavaFiles,
                     generatedXmlFiles, warnings, fullyQualifiedTableNames);
         }
@@ -220,6 +223,7 @@ public class Abator {
                 File directory = shellCallback.getDirectory(gxf
                         .getTargetProject(), gxf.getTargetPackage(), warnings);
                 targetFile = new File(directory, gxf.getFileName());
+                /** READING: 如果sqlMap文件存在，则合并之，否则直接生成新的文件 */
                 if (targetFile.exists()) {
                     source = XmlFileMergerJaxp.getMergedSource(gxf, targetFile);
                 } else {
@@ -230,6 +234,7 @@ public class Abator {
                 continue;
             }
 
+            /** READING: 写入xml文件 (charr 20080823) */
             writeFile(targetFile, source);
         }
 
@@ -257,6 +262,7 @@ public class Abator {
                     source = gjf.getFormattedContent();
                 }
                 
+                /** READING: 写入java文件 (charr 20080823) */
                 writeFile(targetFile, source);
             } catch (ShellException e) {
                 warnings.add(e.getMessage());

@@ -262,6 +262,7 @@ public class AbatorContext extends PropertyHolder {
                 introspectedTables  = databaseIntrospector.introspectTables(tc);
 				callback.checkCancel();
                 
+				/** READING: 这里就是所有生成产物（DAO、SqlMap、Model）的入口 (charr 2008-08-22) */
                 if (introspectedTables != null) {
                     Iterator iter2 = introspectedTables.iterator();
                     while (iter2.hasNext()) {

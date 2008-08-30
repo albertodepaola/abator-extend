@@ -16,11 +16,18 @@
 
 package org.apache.ibatis.abator.internal;
 
+import java.util.Iterator;
+import java.util.List;
+
 import org.apache.ibatis.abator.api.DAOMethodNameCalculator;
 import org.apache.ibatis.abator.api.IntrospectedTable;
+import org.apache.ibatis.abator.internal.db.ColumnDefinition;
 import org.apache.ibatis.abator.internal.rules.AbatorRules;
+import org.apache.ibatis.abator.internal.util.StringUtility;
 
 /**
+ * EXTEND:增加外键查询和索引查询的DAO接口名计算方法
+ * 
  * @author Jeff Butler
  *
  */
@@ -113,6 +120,96 @@ public class DefaultDAOMethodNameCalculator implements DAOMethodNameCalculator {
         } else {
             return "selectByExampleWithBLOBs"; //$NON-NLS-1$
         }
+    }
+    
+    public String getQueryByForeignKeyMethodName(IntrospectedTable introspectedTable, List foreignKeyColumns){
+    	Iterator iter = foreignKeyColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "queryByForeignKey";
+    	else
+    		answer = "queryBy" + answer;
+    	
+    	return answer;
+    }
+    
+    public String getCountByForeignKeyMethodName(IntrospectedTable introspectedTable, List foreignKeyColumns){
+    	Iterator iter = foreignKeyColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "countByForeignKey";
+    	else
+    		answer = "countBy" + answer;
+    	
+    	return answer;
+    }
+    
+    public String getQueryByNonUniqueIndexMethodName(IntrospectedTable introspectedTable, List indexColumns){
+    	Iterator iter = indexColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "queryByNonUniqueIndex";
+    	else
+    		answer = "queryBy" + answer;
+    	
+    	return answer;
+    }
+    
+    public String getCountByNonUniqueIndexMethodName(IntrospectedTable introspectedTable, List indexColumns){
+    	Iterator iter = indexColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "countByNonUniqueIndex";
+    	else
+    		answer = "countBy" + answer;
+    	
+    	return answer;
+    }
+    
+    public String getSelectByUniqueIndexMethodName(IntrospectedTable introspectedTable, List indexColumns){
+    	Iterator iter = indexColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "selectByUniqueIndex";
+    	else
+    		answer = "selectBy" + answer;
+    	
+    	return answer;
     }
 
     public String getSelectByPrimaryKeyMethodName(IntrospectedTable introspectedTable) {

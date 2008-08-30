@@ -16,6 +16,8 @@
 
 package org.apache.ibatis.abator.internal;
 
+import java.util.List;
+
 import org.apache.ibatis.abator.api.DAOMethodNameCalculator;
 import org.apache.ibatis.abator.api.IntrospectedTable;
 import org.apache.ibatis.abator.internal.rules.AbatorRules;
@@ -225,4 +227,35 @@ public class ExtendedDAOMethodNameCalculator implements DAOMethodNameCalculator 
         
         return sb.toString();
     }
+
+	public String getQueryByForeignKeyMethodName(
+			IntrospectedTable introspectedTable, List foreignKeyColumns) {
+		// TODO Auto-generated method stub
+		return "queryByForeignKey";
+	}
+	public String getCountByForeignKeyMethodName(
+			IntrospectedTable introspectedTable, List foreignKeyColumns) {
+		// TODO Auto-generated method stub
+		return "countByForeignKey";
+	}
+
+	public String getQueryByNonUniqueIndexMethodName(
+			IntrospectedTable introspectedTable, List indexColumns) {
+		// TODO Auto-generated method stub
+		return "queryByNonUniqueIndex";
+	}
+
+	public String getCountByNonUniqueIndexMethodName(
+			IntrospectedTable introspectedTable, List indexColumns) {
+		// TODO Auto-generated method stub
+		return "countByNonUniqueIndex";
+	}
+
+
+	public String getSelectByUniqueIndexMethodName(
+			IntrospectedTable introspectedTable, List indexColumns) {
+		// TODO Auto-generated method stub
+		return "selectByUniqueIndex";
+	}
+	
 }

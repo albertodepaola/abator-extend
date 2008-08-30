@@ -162,6 +162,8 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
     /**
      * Creates the sqlMap element (the root element, and all child elements).
      * 
+     * READING: 生成SqlMap的核心函数 (charr 2008-08-22)
+     * 
      * @param introspectedTable
      * @return the sqlMap element including all child elements
      */
@@ -200,10 +202,11 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
         if (rules.generateSelectByPrimaryKey()) {
             element = getSelectByPrimaryKey(introspectedTable);
             if (element != null) {
-                answer.addElement(element);
+            	answer.addElement(element);
             }
         }
-
+        
+        
         if (rules.generateSelectByExampleWithoutBLOBs()) {
             element = getSelectByExample(introspectedTable);
             if (element != null) {
@@ -288,6 +291,32 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
             }
         }
 
+
+        /** EXTEND: 增加根据外键查询的sql语句 (charr 20080823) */
+        List elements = getQueryByForeignKey(introspectedTable);
+        if(elements != null){
+        	Iterator iter2 = elements.iterator();
+        	while(iter2.hasNext()){
+        		answer.addElement((XmlElement)iter2.next());
+        	}
+        }
+        /** EXTEND: 增加根据非唯一索引查询的sql语句 (charr 20080823) */
+        elements = getQueryByNonUniqueIndex(introspectedTable);
+        if(elements != null){
+        	Iterator iter2 = elements.iterator();
+        	while(iter2.hasNext()){
+        		answer.addElement((XmlElement)iter2.next());
+        	}
+        }
+        /** EXTEND: 增加根据唯一索引查询的sql语句 (charr 20080823) */
+        elements = getSelectByUniqueIndex(introspectedTable);
+        if(elements != null){
+        	Iterator iter2 = elements.iterator();
+        	while(iter2.hasNext()){
+        		answer.addElement((XmlElement)iter2.next());
+        	}
+        }
+        
         return answer;
     }
 
@@ -894,6 +923,314 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
 
         return answer;
     }
+    
+    
+    private List getQueryByForeignKey(IntrospectedTable introspectedTable) {
+    	List answer = new ArrayList();
+    	
+    	FullyQualifiedTable table = introspectedTable.getTable();
+    	
+    	Iterator iter = introspectedTable.getForeignKeys();
+    	while(iter.hasNext()){
+    		List columns = (List)iter.next();
+    		XmlElement element = new XmlElement("select");
+    		XmlElement elementCount = new XmlElement("select");
+    		
+    		element.addAttribute(new Attribute(
+                    "id", getQueryByForeignKeyStatementId(introspectedTable, columns)));
+    		elementCount.addAttribute(new Attribute(
+                    "id", getCountByForeignKeyStatementId(introspectedTable, columns)));
+    		
+    		if (introspectedTable.getRules().generateResultMapWithBLOBs()) {
+    			element.addAttribute(new Attribute("resultMap", //$NON-NLS-1$
+                        getResultMapName(table) + "WithBLOBs")); //$NON-NLS-1$
+            } else {
+            	element.addAttribute(new Attribute("resultMap", //$NON-NLS-1$
+                        getResultMapName(table)));
+            }
+    		elementCount.addAttribute(new Attribute("resultClass", "java.lang.Integer"));
+    		
+    		FullyQualifiedJavaType parameterType;
+            if (introspectedTable.getRules().generatePrimaryKeyClass()) {
+                parameterType = javaModelGenerator.getPrimaryKeyType(table);
+            } else {
+                // select by primary key, but no primary key class.  Fields
+                // must be in the base record
+                parameterType = javaModelGenerator.getBaseRecordType(table);
+            }
+            
+            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+                    parameterType.getFullyQualifiedName()));
+            elementCount.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+                    parameterType.getFullyQualifiedName()));
+
+            abatorContext.getCommentGenerator().addComment(element);
+            abatorContext.getCommentGenerator().addComment(elementCount);
+
+            StringBuffer sb = new StringBuffer();
+            sb.append("select "); //$NON-NLS-1$
+
+            boolean comma = false;
+            if (StringUtility.stringHasValue(introspectedTable.getSelectByPrimaryKeyQueryId())) {
+                sb.append('\'');
+                sb.append(introspectedTable.getSelectByPrimaryKeyQueryId());
+                sb.append("' as QUERYID"); //$NON-NLS-1$
+                comma = true;
+            }
+
+            Iterator iter2 = introspectedTable.getAllColumns();
+            while (iter2.hasNext()) {
+                ColumnDefinition cd = (ColumnDefinition) iter2.next();
+                if (comma) {
+                    sb.append(", "); //$NON-NLS-1$
+                } else {
+                    comma = true;
+                }
+
+                sb.append(cd.getSelectListPhrase());
+            }
+
+            element.addElement(new TextElement(sb.toString()));
+            elementCount.addElement(new TextElement("select count(1) "));
+
+            sb.setLength(0);
+            sb.append("from "); //$NON-NLS-1$
+            sb.append(table.getAliasedFullyQualifiedTableNameAtRuntime());
+            element.addElement(new TextElement(sb.toString()));
+            elementCount.addElement(new TextElement(sb.toString()));
+
+            boolean and = false;
+            Iterator iter3 = columns.iterator();
+            while (iter3.hasNext()) {
+                ColumnDefinition cd = (ColumnDefinition) iter3.next();
+
+                sb.setLength(0);
+                if (and) {
+                    sb.append("  and "); //$NON-NLS-1$
+                } else {
+                    sb.append("where "); //$NON-NLS-1$
+                    and = true;
+                }
+
+                sb.append(cd.getAliasedEscapedColumnName());
+                sb.append(" = "); //$NON-NLS-1$
+                sb.append(cd.getIbatisFormattedParameterClause("record."));
+                element.addElement(new TextElement(sb.toString()));
+                elementCount.addElement(new TextElement(sb.toString()));
+            }
+            XmlElement isNotEmptyElement = new XmlElement("isNotEmpty"); //$NON-NLS-1$
+            isNotEmptyElement.addAttribute(new Attribute("property", "orderByClause")); //$NON-NLS-1$ //$NON-NLS-2$
+            isNotEmptyElement.addElement(new TextElement("order by $orderByClause$")); //$NON-NLS-1$
+            element.addElement(isNotEmptyElement);
+            
+            answer.add(element);
+            answer.add(elementCount);
+    	}
+    	
+    	
+    	
+    	return answer;
+    }
+
+    private List getQueryByNonUniqueIndex(IntrospectedTable introspectedTable) {
+    	List answer = new ArrayList();
+    	
+    	FullyQualifiedTable table = introspectedTable.getTable();
+    	
+    	Iterator iter = introspectedTable.getNonUniqueIndices();
+    	while(iter.hasNext()){
+    		List columns = (List)iter.next();
+    		XmlElement element = new XmlElement("select");
+    		XmlElement elementCount = new XmlElement("select");
+    		
+    		element.addAttribute(new Attribute(
+                    "id", getQueryByNonUniqueIndexStatementId(introspectedTable, columns)));
+    		elementCount.addAttribute(new Attribute(
+                    "id", getCountByNonUniqueIndexStatementId(introspectedTable, columns)));
+    		
+    		if (introspectedTable.getRules().generateResultMapWithBLOBs()) {
+    			element.addAttribute(new Attribute("resultMap", //$NON-NLS-1$
+                        getResultMapName(table) + "WithBLOBs")); //$NON-NLS-1$
+            } else {
+            	element.addAttribute(new Attribute("resultMap", //$NON-NLS-1$
+                        getResultMapName(table)));
+            }
+    		elementCount.addAttribute(new Attribute("resultClass", "java.lang.Integer"));
+    		
+    		FullyQualifiedJavaType parameterType;
+            if (introspectedTable.getRules().generatePrimaryKeyClass()) {
+                parameterType = javaModelGenerator.getPrimaryKeyType(table);
+            } else {
+                // select by primary key, but no primary key class.  Fields
+                // must be in the base record
+                parameterType = javaModelGenerator.getBaseRecordType(table);
+            }
+            
+            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+                    parameterType.getFullyQualifiedName()));
+            elementCount.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+                    parameterType.getFullyQualifiedName()));
+
+            abatorContext.getCommentGenerator().addComment(element);
+            abatorContext.getCommentGenerator().addComment(elementCount);
+
+            StringBuffer sb = new StringBuffer();
+            sb.append("select "); //$NON-NLS-1$
+
+            boolean comma = false;
+            if (StringUtility.stringHasValue(introspectedTable.getSelectByPrimaryKeyQueryId())) {
+                sb.append('\'');
+                sb.append(introspectedTable.getSelectByPrimaryKeyQueryId());
+                sb.append("' as QUERYID"); //$NON-NLS-1$
+                comma = true;
+            }
+
+            Iterator iter2 = introspectedTable.getAllColumns();
+            while (iter2.hasNext()) {
+                ColumnDefinition cd = (ColumnDefinition) iter2.next();
+                if (comma) {
+                    sb.append(", "); //$NON-NLS-1$
+                } else {
+                    comma = true;
+                }
+
+                sb.append(cd.getSelectListPhrase());
+            }
+
+            element.addElement(new TextElement(sb.toString()));
+            elementCount.addElement(new TextElement("select count(1) "));
+
+            sb.setLength(0);
+            sb.append("from "); //$NON-NLS-1$
+            sb.append(table.getAliasedFullyQualifiedTableNameAtRuntime());
+            element.addElement(new TextElement(sb.toString()));
+            elementCount.addElement(new TextElement(sb.toString()));
+
+            boolean and = false;
+            Iterator iter3 = columns.iterator();
+            while (iter3.hasNext()) {
+                ColumnDefinition cd = (ColumnDefinition) iter3.next();
+
+                sb.setLength(0);
+                if (and) {
+                    sb.append("  and "); //$NON-NLS-1$
+                } else {
+                    sb.append("where "); //$NON-NLS-1$
+                    and = true;
+                }
+
+                sb.append(cd.getAliasedEscapedColumnName());
+                sb.append(" = "); //$NON-NLS-1$
+                sb.append(cd.getIbatisFormattedParameterClause("record."));
+                element.addElement(new TextElement(sb.toString()));
+                elementCount.addElement(new TextElement(sb.toString()));
+            }
+            XmlElement isNotEmptyElement = new XmlElement("isNotEmpty"); //$NON-NLS-1$
+            isNotEmptyElement.addAttribute(new Attribute("property", "orderByClause")); //$NON-NLS-1$ //$NON-NLS-2$
+            isNotEmptyElement.addElement(new TextElement("order by $orderByClause$")); //$NON-NLS-1$
+            element.addElement(isNotEmptyElement);
+            
+            
+            answer.add(element);
+            answer.add(elementCount);
+    	}
+    	
+    	
+    	
+    	return answer;
+    }
+    
+
+    private List getSelectByUniqueIndex(IntrospectedTable introspectedTable) {
+    	List answer = new ArrayList();
+    	
+    	FullyQualifiedTable table = introspectedTable.getTable();
+    	
+    	Iterator iter = introspectedTable.getUniqueIndices();
+    	while(iter.hasNext()){
+    		List columns = (List)iter.next();
+    		XmlElement element = new XmlElement("select");
+    		element.addAttribute(new Attribute(
+                    "id", getSelectByUniqueIndexStatementId(introspectedTable, columns)));
+    		if (introspectedTable.getRules().generateResultMapWithBLOBs()) {
+    			element.addAttribute(new Attribute("resultMap", //$NON-NLS-1$
+                        getResultMapName(table) + "WithBLOBs")); //$NON-NLS-1$
+            } else {
+            	element.addAttribute(new Attribute("resultMap", //$NON-NLS-1$
+                        getResultMapName(table)));
+            }
+    		
+    		FullyQualifiedJavaType parameterType;
+            if (introspectedTable.getRules().generatePrimaryKeyClass()) {
+                parameterType = javaModelGenerator.getPrimaryKeyType(table);
+            } else {
+                // select by primary key, but no primary key class.  Fields
+                // must be in the base record
+                parameterType = javaModelGenerator.getBaseRecordType(table);
+            }
+            
+            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+                    parameterType.getFullyQualifiedName()));
+
+            abatorContext.getCommentGenerator().addComment(element);
+
+            StringBuffer sb = new StringBuffer();
+            sb.append("select "); //$NON-NLS-1$
+
+            boolean comma = false;
+            if (StringUtility.stringHasValue(introspectedTable.getSelectByPrimaryKeyQueryId())) {
+                sb.append('\'');
+                sb.append(introspectedTable.getSelectByPrimaryKeyQueryId());
+                sb.append("' as QUERYID"); //$NON-NLS-1$
+                comma = true;
+            }
+
+            Iterator iter2 = introspectedTable.getAllColumns();
+            while (iter2.hasNext()) {
+                ColumnDefinition cd = (ColumnDefinition) iter2.next();
+                if (comma) {
+                    sb.append(", "); //$NON-NLS-1$
+                } else {
+                    comma = true;
+                }
+
+                sb.append(cd.getSelectListPhrase());
+            }
+
+            element.addElement(new TextElement(sb.toString()));
+
+            sb.setLength(0);
+            sb.append("from "); //$NON-NLS-1$
+            sb.append(table.getAliasedFullyQualifiedTableNameAtRuntime());
+            element.addElement(new TextElement(sb.toString()));
+
+            boolean and = false;
+            Iterator iter3 = columns.iterator();
+            while (iter3.hasNext()) {
+                ColumnDefinition cd = (ColumnDefinition) iter3.next();
+
+                sb.setLength(0);
+                if (and) {
+                    sb.append("  and "); //$NON-NLS-1$
+                } else {
+                    sb.append("where "); //$NON-NLS-1$
+                    and = true;
+                }
+
+                sb.append(cd.getAliasedEscapedColumnName());
+                sb.append(" = "); //$NON-NLS-1$
+                sb.append(cd.getIbatisFormattedParameterClause());
+                element.addElement(new TextElement(sb.toString()));
+            }
+            
+            answer.add(element);
+    	}
+    	
+    	
+    	
+    	return answer;
+    }
+    
 
     /**
      * This method should return an XmlElement for the select key used to
@@ -1041,6 +1378,97 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
      */
     public String getSelectByPrimaryKeyStatementId() {
         return "abatorgenerated_selectByPrimaryKey"; //$NON-NLS-1$
+    }
+    
+    
+    public String getQueryByForeignKeyStatementId(IntrospectedTable introspectedTable, List foreignKeyColumns){
+    	Iterator iter = foreignKeyColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "charrgenerated_queryByForeignKey";
+    	else
+    		answer = "charrgenerated_queryBy" + answer;
+    	
+    	return answer;
+    }
+    
+    public String getCountByForeignKeyStatementId(IntrospectedTable introspectedTable, List foreignKeyColumns){
+    	Iterator iter = foreignKeyColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "charrgenerated_countByForeignKey";
+    	else
+    		answer = "charrgenerated_countBy" + answer;
+    	
+    	return answer;
+    }
+
+    public String getQueryByNonUniqueIndexStatementId(IntrospectedTable introspectedTable, List indexColumns){
+    	Iterator iter = indexColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "charrgenerated_queryByForeignKey";
+    	else
+    		answer = "charrgenerated_queryBy" + answer;
+    	
+    	return answer;
+    }
+
+    public String getCountByNonUniqueIndexStatementId(IntrospectedTable introspectedTable, List indexColumns){
+    	Iterator iter = indexColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "charrgenerated_countByForeignKey";
+    	else
+    		answer = "charrgenerated_countBy" + answer;
+    	
+    	return answer;
+    }
+
+    public String getSelectByUniqueIndexStatementId(IntrospectedTable introspectedTable, List indexColumns){
+    	Iterator iter = indexColumns.iterator();
+    	String answer = "";
+    	while(iter.hasNext()){
+    		ColumnDefinition cd = (ColumnDefinition)iter.next();
+    		if("".equals(answer))
+    			answer += StringUtility.toInitCap(cd.getJavaProperty());
+    		else
+    			answer += "And" + StringUtility.toInitCap(cd.getJavaProperty());
+    	}
+    	if("".equals(answer))
+    		answer = "charrgenerated_selectByForeignKey";
+    	else
+    		answer = "charrgenerated_selectBy" + answer;
+    	
+    	return answer;
     }
 
     /*

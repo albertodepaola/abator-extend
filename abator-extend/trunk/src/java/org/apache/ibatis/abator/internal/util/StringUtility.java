@@ -90,4 +90,13 @@ public class StringUtility {
         
         return sb.toString();
     }
+    
+    /** EXTEND: Ê××ÖÄ¸´óÐ´ (charr 2008-08-22) */
+    public static String toInitCap(String s){
+    	if(s == null)
+    		return s;
+    	if(s.length() < 2)
+    		return s.toUpperCase();
+    	return s.substring(0, 1).toUpperCase() + s.substring(1);
+    }
 }

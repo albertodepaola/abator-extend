@@ -96,5 +96,14 @@ public interface SqlMapGenerator {
     
     String getUpdateByExampleWithBLOBsStatementId();
     
+    /** EXTEND: 根据外键查询的SqlMap查询id (charr 2008-08-22) */
+    String getQueryByForeignKeyStatementId(IntrospectedTable introspectedTable, List foreignKeyColumns);
+    String getCountByForeignKeyStatementId(IntrospectedTable introspectedTable, List foreignKeyColumns);
+    /** EXTEND: 根据非唯一性索引查询的SqlMap查询id (charr 2008-08-23) */
+    String getQueryByNonUniqueIndexStatementId(IntrospectedTable introspectedTable, List indexColumns);
+    String getCountByNonUniqueIndexStatementId(IntrospectedTable introspectedTable, List indexColumns);
+    /** EXTEND: 根据唯一性查询的SqlMap查询id (charr 2008-08-23) */
+    String getSelectByUniqueIndexStatementId(IntrospectedTable introspectedTable, List indexColumns);
+    
     List getGeneratedXMLFiles(IntrospectedTable introspectedTable, ProgressCallback callback);
 }

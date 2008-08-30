@@ -88,6 +88,8 @@ import org.apache.ibatis.abator.internal.util.messages.Messages;
  * interface.</dd>
  * </dl>
  * 
+ * READING: DAO接口和实现的生成器
+ * EXTEND: 扩展了根据外键和索引进行查询的方法
  * 
  * @author Jeff Butler
  */
@@ -414,10 +416,434 @@ public class BaseDAOGenerator implements DAOGenerator {
                 answer.addInnerClass(innerClass);
             }
         }
+        
+        /** EXTEND: 增加根据外键和索引字段检索的方法 (charr 2008-08-22) */
+        methods = getQueryByForeignKeyMethods(introspectedTable, false, answer);
+        if(methods != null){
+        	iter = methods.iterator();
+        	while(iter.hasNext()){
+        		answer.addMethod((Method)iter.next());
+        	}
+        }
+        methods = getQueryByNonUniqueIndexMethods(introspectedTable, false, answer);
+        if(methods != null){
+        	iter = methods.iterator();
+        	while(iter.hasNext()){
+        		answer.addMethod((Method)iter.next());
+        	}
+        }
+        methods = getSelectByUniqueIndexMethods(introspectedTable, false, answer);
+        if(methods != null){
+        	iter = methods.iterator();
+        	while(iter.hasNext()){
+        		answer.addMethod((Method)iter.next());
+        	}
+        }
+        InnerClass ic = getOrderByParms(introspectedTable, answer);
+        if(ic != null){
+        	answer.addInnerClass(ic);
+        }
+        
 
         afterImplementationGenerationHook(introspectedTable, answer);
         
         return answer;
+    }
+    
+    private List getQueryByForeignKeyMethods(
+            IntrospectedTable introspectedTable, boolean interfaceMethod,
+            CompilationUnit compilationUnit) {
+    	    	
+    	FullyQualifiedTable table = introspectedTable.getTable();
+        FullyQualifiedJavaType type = javaModelGenerator.getExampleType(table);
+        compilationUnit.addImportedType(type);
+        compilationUnit.addImportedType(FullyQualifiedJavaType
+                .getNewListInstance());
+
+
+    	List answer = new ArrayList();
+    	
+    	Iterator iter = introspectedTable.getForeignKeys();
+    	while(iter.hasNext()){
+    		List columns = (List)iter.next();
+    		
+	        Method method = new Method();
+	        Method methodPaging = new Method();
+	        Method methodCount = new Method();
+	        method.setVisibility(JavaVisibility.PUBLIC);
+	        methodPaging.setVisibility(JavaVisibility.PUBLIC);
+	        methodCount.setVisibility(JavaVisibility.PUBLIC);
+	        
+	        FullyQualifiedJavaType returnType;
+	        if (useJava5Features) {
+	            FullyQualifiedJavaType fqjt;
+	            if (introspectedTable.getRules().generateRecordWithBLOBsClass()) {
+	                fqjt = javaModelGenerator.getRecordWithBLOBsType(table);
+	            } else {
+	                // the blob fileds must be rolled up into the base class
+	                fqjt = javaModelGenerator.getBaseRecordType(table);
+	            }
+	            
+	            compilationUnit.addImportedType(fqjt);
+	            returnType = FullyQualifiedJavaType.getNewListInstance();
+	            returnType.addTypeArgument(fqjt);
+	        } else {
+	            returnType = FullyQualifiedJavaType.getNewListInstance();
+	        }
+	        method.setReturnType(returnType);
+	        methodPaging.setReturnType(returnType);
+	        methodCount.setReturnType(FullyQualifiedJavaType.getIntInstance());
+	        
+	        method.setName(methodNameCalculator.getQueryByForeignKeyMethodName(introspectedTable, columns));
+	        methodPaging.setName(methodNameCalculator.getQueryByForeignKeyMethodName(introspectedTable, columns));
+	        methodCount.setName(methodNameCalculator.getCountByForeignKeyMethodName(introspectedTable, columns));
+	        Iterator iter2 = columns.iterator();
+	        while(iter2.hasNext()){
+	        	ColumnDefinition cd = (ColumnDefinition)iter2.next();
+	        	FullyQualifiedJavaType type2 = cd.getResolvedJavaType().getFullyQualifiedJavaType();
+	        	compilationUnit.addImportedType(type2);
+	        	method.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        	methodPaging.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        	methodCount.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        }
+	        method.addParameter(new Parameter(new FullyQualifiedJavaType("java.lang.String"), "orderBy"));
+	        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("java.lang.String"), "orderBy"));
+	        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "skipResults"));
+	        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "maxResults"));
+	        
+	        Iterator iter3 = daoTemplate.getCheckedExceptions().iterator();
+	        while (iter3.hasNext()) {
+	            FullyQualifiedJavaType fqjt = (FullyQualifiedJavaType) iter3.next();
+	            method.addException(fqjt);
+	            methodPaging.addException(fqjt);
+	            methodCount.addException(fqjt);
+	            compilationUnit.addImportedType(fqjt);
+	        }
+	        
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(method, table);
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(methodPaging, table);
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(methodCount, table);
+	        
+	        if (!interfaceMethod) {
+	            // generate the implementation method
+	            StringBuffer sb = new StringBuffer();
+
+	            
+                FullyQualifiedJavaType keyType = javaModelGenerator.getBaseRecordType(table);
+                compilationUnit.addImportedType(keyType);
+                
+                sb.setLength(0);
+                sb.append(keyType.getShortName());
+                sb.append(" record = new "); //$NON-NLS-1$
+                sb.append(keyType.getShortName());
+                sb.append("();"); //$NON-NLS-1$
+                method.addBodyLine(sb.toString());
+                methodPaging.addBodyLine(sb.toString());
+                methodCount.addBodyLine(sb.toString());
+                
+                Iterator iter4 = columns.iterator();
+                while (iter4.hasNext()) {
+                    ColumnDefinition cd = (ColumnDefinition) iter4.next();
+                    sb.setLength(0);
+                    sb.append("record."); //$NON-NLS-1$
+                    sb.append(JavaBeansUtil.getSetterMethodName(cd.getJavaProperty()));
+                    sb.append('(');
+                    sb.append(cd.getJavaProperty());
+                    sb.append(");"); //$NON-NLS-1$
+                    method.addBodyLine(sb.toString());
+                    methodPaging.addBodyLine(sb.toString());
+                    methodCount.addBodyLine(sb.toString());
+                }
+                method.addBodyLine("OrderByParms parms = new OrderByParms(record, orderBy);"); //$NON-NLS-1$
+                methodPaging.addBodyLine("OrderByParms parms = new OrderByParms(record, orderBy);"); //$NON-NLS-1$
+            
+
+	            sb.setLength(0);
+	            sb.append(returnType.getShortName());
+	            sb.append(" list = ("); //$NON-NLS-1$
+	            sb.append(returnType.getShortName());
+	            sb.append(") "); //$NON-NLS-1$
+	            sb.append(daoTemplate.getQueryForListMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getQueryByForeignKeyStatementId(introspectedTable, columns), "parms")); //$NON-NLS-1$
+	            method.addBodyLine(sb.toString());
+	            
+	            sb.setLength(0);
+	            sb.append(returnType.getShortName());
+	            sb.append(" list = ("); //$NON-NLS-1$
+	            sb.append(returnType.getShortName());
+	            sb.append(") "); //$NON-NLS-1$
+	            sb.append(daoTemplate.getQueryForListMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getQueryByForeignKeyStatementId(introspectedTable, columns), "parms, skipResults, maxResults")); //$NON-NLS-1$
+	            methodPaging.addBodyLine(sb.toString());
+	            
+	            sb.setLength(0);
+	            sb.append("Integer count = (Integer)");
+	            sb.append(daoTemplate.getQueryForObjectMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getCountByForeignKeyStatementId(introspectedTable, columns), "record")); //$NON-NLS-1$
+	            methodCount.addBodyLine(sb.toString());
+	            
+	            
+	            method.addBodyLine("return list;"); //$NON-NLS-1$
+	            methodPaging.addBodyLine("return list;"); //$NON-NLS-1$
+	            if (useJava5Features) {
+	            	methodCount.addBodyLine("return count;"); //$NON-NLS-1$
+	            } else {
+	            	methodCount.addBodyLine("return count.intValue();"); //$NON-NLS-1$
+	            }
+	            
+	        }
+	        
+	        answer.add(method);
+	        answer.add(methodPaging);
+	        answer.add(methodCount);
+    	}
+    	    	
+    	return answer;
+    }
+    
+    private List getQueryByNonUniqueIndexMethods(
+            IntrospectedTable introspectedTable, boolean interfaceMethod,
+            CompilationUnit compilationUnit) {
+    	    	
+    	FullyQualifiedTable table = introspectedTable.getTable();
+        FullyQualifiedJavaType type = javaModelGenerator.getExampleType(table);
+        compilationUnit.addImportedType(type);
+        compilationUnit.addImportedType(FullyQualifiedJavaType
+                .getNewListInstance());
+
+
+    	List answer = new ArrayList();
+    	
+    	Iterator iter = introspectedTable.getNonUniqueIndices();
+    	while(iter.hasNext()){
+    		List columns = (List)iter.next();
+    		
+	        Method method = new Method();
+	        Method methodPaging = new Method();
+	        Method methodCount = new Method();
+	        method.setVisibility(JavaVisibility.PUBLIC);
+	        methodPaging.setVisibility(JavaVisibility.PUBLIC);
+	        methodCount.setVisibility(JavaVisibility.PUBLIC);
+	        
+	        FullyQualifiedJavaType returnType;
+	        if (useJava5Features) {
+	            FullyQualifiedJavaType fqjt;
+	            if (introspectedTable.getRules().generateRecordWithBLOBsClass()) {
+	                fqjt = javaModelGenerator.getRecordWithBLOBsType(table);
+	            } else {
+	                // the blob fileds must be rolled up into the base class
+	                fqjt = javaModelGenerator.getBaseRecordType(table);
+	            }
+	            
+	            compilationUnit.addImportedType(fqjt);
+	            returnType = FullyQualifiedJavaType.getNewListInstance();
+	            returnType.addTypeArgument(fqjt);
+	        } else {
+	            returnType = FullyQualifiedJavaType.getNewListInstance();
+	        }
+	        method.setReturnType(returnType);
+	        methodPaging.setReturnType(returnType);
+	        methodCount.setReturnType(FullyQualifiedJavaType.getIntInstance());
+	        
+	        method.setName(methodNameCalculator.getQueryByNonUniqueIndexMethodName(introspectedTable, columns));
+	        methodPaging.setName(methodNameCalculator.getQueryByNonUniqueIndexMethodName(introspectedTable, columns));
+	        methodCount.setName(methodNameCalculator.getCountByNonUniqueIndexMethodName(introspectedTable, columns));
+	        
+	        Iterator iter2 = columns.iterator();
+	        while(iter2.hasNext()){
+	        	ColumnDefinition cd = (ColumnDefinition)iter2.next();
+	        	FullyQualifiedJavaType type2 = cd.getResolvedJavaType().getFullyQualifiedJavaType();
+	        	compilationUnit.addImportedType(type2);
+	        	method.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        	methodPaging.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        	methodCount.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        }
+	        method.addParameter(new Parameter(new FullyQualifiedJavaType("java.lang.String"), "orderBy"));
+	        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("java.lang.String"), "orderBy"));
+	        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "skipResults"));
+	        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "maxResults"));
+	        
+	        Iterator iter3 = daoTemplate.getCheckedExceptions().iterator();
+	        while (iter3.hasNext()) {
+	            FullyQualifiedJavaType fqjt = (FullyQualifiedJavaType) iter3.next();
+	            method.addException(fqjt);
+	            methodPaging.addException(fqjt);
+	            compilationUnit.addImportedType(fqjt);
+	            methodCount.addException(fqjt);
+	        }
+	        
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(method, table);
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(methodPaging, table);
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(methodCount, table);
+	        
+	        if (!interfaceMethod) {
+	            // generate the implementation method
+	            StringBuffer sb = new StringBuffer();
+
+	            
+                FullyQualifiedJavaType keyType = javaModelGenerator.getBaseRecordType(table);
+                compilationUnit.addImportedType(keyType);
+                
+                sb.setLength(0);
+                sb.append(keyType.getShortName());
+                sb.append(" record = new "); //$NON-NLS-1$
+                sb.append(keyType.getShortName());
+                sb.append("();"); //$NON-NLS-1$
+                method.addBodyLine(sb.toString());
+                methodPaging.addBodyLine(sb.toString());
+                methodCount.addBodyLine(sb.toString());
+                
+                Iterator iter4 = columns.iterator();
+                while (iter4.hasNext()) {
+                    ColumnDefinition cd = (ColumnDefinition) iter4.next();
+                    sb.setLength(0);
+                    sb.append("record."); //$NON-NLS-1$
+                    sb.append(JavaBeansUtil.getSetterMethodName(cd.getJavaProperty()));
+                    sb.append('(');
+                    sb.append(cd.getJavaProperty());
+                    sb.append(");"); //$NON-NLS-1$
+                    method.addBodyLine(sb.toString());
+                    methodPaging.addBodyLine(sb.toString());
+                    methodCount.addBodyLine(sb.toString());
+                }
+                method.addBodyLine("OrderByParms parms = new OrderByParms(record, orderBy);"); //$NON-NLS-1$
+                methodPaging.addBodyLine("OrderByParms parms = new OrderByParms(record, orderBy);"); //$NON-NLS-1$
+            
+
+	            sb.setLength(0);
+	            sb.append(returnType.getShortName());
+	            sb.append(" list = ("); //$NON-NLS-1$
+	            sb.append(returnType.getShortName());
+	            sb.append(") "); //$NON-NLS-1$
+	            sb.append(daoTemplate.getQueryForListMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getQueryByNonUniqueIndexStatementId(introspectedTable, columns), "parms")); //$NON-NLS-1$
+	            method.addBodyLine(sb.toString());
+	            
+	            sb.setLength(0);
+	            sb.append(returnType.getShortName());
+	            sb.append(" list = ("); //$NON-NLS-1$
+	            sb.append(returnType.getShortName());
+	            sb.append(") "); //$NON-NLS-1$
+	            sb.append(daoTemplate.getQueryForListMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getQueryByNonUniqueIndexStatementId(introspectedTable, columns), "parms, skipResults, maxResults")); //$NON-NLS-1$
+	            methodPaging.addBodyLine(sb.toString());
+
+	            sb.setLength(0);
+	            sb.append("Integer count = (Integer)");
+	            sb.append(daoTemplate.getQueryForObjectMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getCountByNonUniqueIndexStatementId(introspectedTable, columns), "record")); //$NON-NLS-1$
+	            methodCount.addBodyLine(sb.toString());
+	            
+	            method.addBodyLine("return list;"); //$NON-NLS-1$
+	            methodPaging.addBodyLine("return list;"); //$NON-NLS-1$
+	            if (useJava5Features) {
+	            	methodCount.addBodyLine("return count;"); //$NON-NLS-1$
+	            } else {
+	            	methodCount.addBodyLine("return count.intValue();"); //$NON-NLS-1$
+	            }
+	        }
+	        
+	        answer.add(method);
+	        answer.add(methodPaging);
+	        answer.add(methodCount);
+    	}
+    	    	
+    	return answer;
+    }
+    
+    private List getSelectByUniqueIndexMethods(
+            IntrospectedTable introspectedTable, boolean interfaceMethod,
+            CompilationUnit compilationUnit) {
+    	    	
+    	FullyQualifiedTable table = introspectedTable.getTable();
+        FullyQualifiedJavaType type = javaModelGenerator.getExampleType(table);
+        compilationUnit.addImportedType(type);
+        compilationUnit.addImportedType(FullyQualifiedJavaType
+                .getNewListInstance());
+
+
+    	List answer = new ArrayList();
+    	
+    	Iterator iter = introspectedTable.getUniqueIndices();
+    	while(iter.hasNext()){
+    		List columns = (List)iter.next();
+    		
+	        Method method = new Method();
+	        method.setVisibility(JavaVisibility.PUBLIC);
+	        
+	        FullyQualifiedJavaType returnType =
+	            introspectedTable.getRules().calculateAllFieldsClass(javaModelGenerator, table);
+	        method.setReturnType(returnType);
+	        compilationUnit.addImportedType(returnType);
+	        
+	        method.setName(methodNameCalculator.getSelectByUniqueIndexMethodName(introspectedTable, columns));
+	        Iterator iter2 = columns.iterator();
+	        while(iter2.hasNext()){
+	        	ColumnDefinition cd = (ColumnDefinition)iter2.next();
+	        	FullyQualifiedJavaType type2 = cd.getResolvedJavaType().getFullyQualifiedJavaType();
+	        	compilationUnit.addImportedType(type2);
+	        	method.addParameter(new Parameter(type2, cd.getJavaProperty()));
+	        }
+	        
+	        Iterator iter3 = daoTemplate.getCheckedExceptions().iterator();
+	        while (iter3.hasNext()) {
+	            FullyQualifiedJavaType fqjt = (FullyQualifiedJavaType) iter3.next();
+	            method.addException(fqjt);
+	            compilationUnit.addImportedType(fqjt);
+	        }
+	        
+	        abatorContext.getCommentGenerator().addGeneralMethodComment(method, table);
+	        
+	        if (!interfaceMethod) {
+	            // generate the implementation method
+	            StringBuffer sb = new StringBuffer();
+
+	            
+                FullyQualifiedJavaType keyType = javaModelGenerator.getBaseRecordType(table);
+                compilationUnit.addImportedType(keyType);
+                
+                sb.setLength(0);
+                sb.append(keyType.getShortName());
+                sb.append(" key = new "); //$NON-NLS-1$
+                sb.append(keyType.getShortName());
+                sb.append("();"); //$NON-NLS-1$
+                method.addBodyLine(sb.toString());
+                
+                Iterator iter4 = columns.iterator();
+                while (iter4.hasNext()) {
+                    ColumnDefinition cd = (ColumnDefinition) iter4.next();
+                    sb.setLength(0);
+                    sb.append("key."); //$NON-NLS-1$
+                    sb.append(JavaBeansUtil.getSetterMethodName(cd.getJavaProperty()));
+                    sb.append('(');
+                    sb.append(cd.getJavaProperty());
+                    sb.append(");"); //$NON-NLS-1$
+                    method.addBodyLine(sb.toString());
+                }
+            
+
+	            sb.setLength(0);
+	            sb.append(returnType.getShortName());
+	            sb.append(" record = ("); //$NON-NLS-1$
+	            sb.append(returnType.getShortName());
+	            sb.append(") "); //$NON-NLS-1$
+	            sb.append(daoTemplate.getQueryForObjectMethod(sqlMapGenerator
+	                    .getSqlMapNamespace(table), sqlMapGenerator
+	                    .getSelectByUniqueIndexStatementId(introspectedTable, columns), "key")); //$NON-NLS-1$
+	            method.addBodyLine(sb.toString());
+	            method.addBodyLine("return record;"); //$NON-NLS-1$
+	        }
+	        
+	        answer.add(method);
+    	}
+    	    	
+    	return answer;
     }
 
     /**
@@ -601,6 +1027,29 @@ public class BaseDAOGenerator implements DAOGenerator {
                     answer.addMethod((Method) iter.next());
                 }
             }
+        }
+        
+        /** EXTEND: 增加根据外键和索引字段检索的方法 (charr 2008-08-22) */
+        methods = getQueryByForeignKeyMethods(introspectedTable, true, answer);
+        if(methods != null){
+        	iter = methods.iterator();
+        	while(iter.hasNext()){
+        		answer.addMethod((Method)iter.next());
+        	}
+        }
+        methods = getQueryByNonUniqueIndexMethods(introspectedTable, true, answer);
+        if(methods != null){
+        	iter = methods.iterator();
+        	while(iter.hasNext()){
+        		answer.addMethod((Method)iter.next());
+        	}
+        }
+        methods = getSelectByUniqueIndexMethods(introspectedTable, true, answer);
+        if(methods != null){
+        	iter = methods.iterator();
+        	while(iter.hasNext()){
+        		answer.addMethod((Method)iter.next());
+        	}
         }
         
         afterInterfaceGenerationHook(introspectedTable, answer);
@@ -857,6 +1306,10 @@ public class BaseDAOGenerator implements DAOGenerator {
         return answer;
     }
 
+
+    /**
+     * EXTEND:增加了支持分页的方法 (charr 2008-08-22)
+     */
     protected List getSelectByExampleWithoutBLOBsMethods(
             IntrospectedTable introspectedTable, boolean interfaceMethod,
             CompilationUnit compilationUnit) {
@@ -872,7 +1325,10 @@ public class BaseDAOGenerator implements DAOGenerator {
                 .getNewListInstance());
 
         Method method = new Method();
+        Method methodPaging = new Method();		//charr 2008-08-22
+        
         method.setVisibility(exampleMethodVisibility);
+        methodPaging.setVisibility(exampleMethodVisibility);	//charr 2008-08-22
 
         FullyQualifiedJavaType returnType;
         if (useJava5Features) {
@@ -893,18 +1349,26 @@ public class BaseDAOGenerator implements DAOGenerator {
             returnType = FullyQualifiedJavaType.getNewListInstance();
         }
         method.setReturnType(returnType);
+        methodPaging.setReturnType(returnType);		//charr 2008-08-22
 
         method.setName(methodNameCalculator.getSelectByExampleWithoutBLOBsMethodName(introspectedTable));
+        methodPaging.setName(methodNameCalculator.getSelectByExampleWithoutBLOBsMethodName(introspectedTable));		//charr 2008-08-22
         method.addParameter(new Parameter(type, "example")); //$NON-NLS-1$
+        methodPaging.addParameter(new Parameter(type, "example")); //$NON-NLS-1$		//charr 2008-08-22
+        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "skipResults"));		//charr 2008-08-22
+        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "maxResults"));		//charr 2008-08-22
+        
 
         Iterator iter = daoTemplate.getCheckedExceptions().iterator();
         while (iter.hasNext()) {
             FullyQualifiedJavaType fqjt = (FullyQualifiedJavaType) iter.next();
             method.addException(fqjt);
+            methodPaging.addException(fqjt);		//charr 2008-08-22
             compilationUnit.addImportedType(fqjt);
         }
 
         abatorContext.getCommentGenerator().addGeneralMethodComment(method, table);
+        abatorContext.getCommentGenerator().addGeneralMethodComment(methodPaging, table);		//charr 2008-08-22
 
         if (!interfaceMethod) {
             // generate the implementation method
@@ -912,6 +1376,7 @@ public class BaseDAOGenerator implements DAOGenerator {
 
             if (useJava5Features) {
                 method.addSuppressTypeWarningsAnnotation();
+                methodPaging.addSuppressTypeWarningsAnnotation();		//charr 2008-08-22
                 sb.append(returnType.getShortName());
                 sb.append(" list = ("); //$NON-NLS-1$
                 sb.append(returnType.getShortName());
@@ -920,19 +1385,30 @@ public class BaseDAOGenerator implements DAOGenerator {
                 sb.append("List list = "); //$NON-NLS-1$
             }
 
+            String paging = sb.toString();
             sb.append(daoTemplate.getQueryForListMethod(sqlMapGenerator
                     .getSqlMapNamespace(table), sqlMapGenerator
                     .getSelectByExampleStatementId(), "example")); //$NON-NLS-1$
             method.addBodyLine(sb.toString());
+            //charr 2008-08-22 分页的参数
+            paging += daoTemplate.getQueryForListMethod(sqlMapGenerator
+                    .getSqlMapNamespace(table), sqlMapGenerator
+                    .getSelectByExampleStatementId(), "example, skipResults, maxResults");
+            methodPaging.addBodyLine(paging);		//charr 2008-08-22
             method.addBodyLine("return list;"); //$NON-NLS-1$
+            methodPaging.addBodyLine("return list;"); //$NON-NLS-1$		//charr 2008-08-22
         }
 
         ArrayList answer = new ArrayList();
         answer.add(method);
+        answer.add(methodPaging);		//charr 2008-08-22
 
         return answer;
     }
 
+    /**
+     * EXTEND:增加了支持分页的方法 (charr 2008-08-22)
+     */
     protected List getSelectByExampleWithBLOBsMethods(
             IntrospectedTable introspectedTable, boolean interfaceMethod,
             CompilationUnit compilationUnit) {
@@ -948,7 +1424,9 @@ public class BaseDAOGenerator implements DAOGenerator {
                 .getNewListInstance());
 
         Method method = new Method();
+        Method methodPaging = new Method();		//charr 2008-08-22
         method.setVisibility(exampleMethodVisibility);
+        methodPaging.setVisibility(exampleMethodVisibility);	//charr 2008-08-22
 
         FullyQualifiedJavaType returnType;
         if (useJava5Features) {
@@ -967,18 +1445,25 @@ public class BaseDAOGenerator implements DAOGenerator {
             returnType = FullyQualifiedJavaType.getNewListInstance();
         }
         method.setReturnType(returnType);
+        methodPaging.setReturnType(returnType);		//charr 2008-08-22
 
         method.setName(methodNameCalculator.getSelectByExampleWithBLOBsMethodName(introspectedTable));
+        methodPaging.setName(methodNameCalculator.getSelectByExampleWithBLOBsMethodName(introspectedTable));		//charr 2008-08-22
         method.addParameter(new Parameter(type, "example")); //$NON-NLS-1$
+        methodPaging.addParameter(new Parameter(type, "example")); //$NON-NLS-1$		//charr 2008-08-22
+        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "skipResults"));		//charr 2008-08-22
+        methodPaging.addParameter(new Parameter(new FullyQualifiedJavaType("int"), "maxResults"));		//charr 2008-08-22
 
         Iterator iter = daoTemplate.getCheckedExceptions().iterator();
         while (iter.hasNext()) {
             FullyQualifiedJavaType fqjt = (FullyQualifiedJavaType) iter.next();
             method.addException(fqjt);
+            methodPaging.addException(fqjt);		//charr 2008-08-22
             compilationUnit.addImportedType(fqjt);
         }
 
         abatorContext.getCommentGenerator().addGeneralMethodComment(method, table);
+        abatorContext.getCommentGenerator().addGeneralMethodComment(methodPaging, table);		//charr 2008-08-22
 
         if (!interfaceMethod) {
             // generate the implementation method
@@ -987,6 +1472,7 @@ public class BaseDAOGenerator implements DAOGenerator {
 
             if (useJava5Features) {
                 method.addSuppressTypeWarningsAnnotation();
+                methodPaging.addSuppressTypeWarningsAnnotation();		//charr 2008-08-22
                 sb.append(returnType.getShortName());
                 sb.append(" list = ("); //$NON-NLS-1$
                 sb.append(returnType.getShortName());
@@ -995,15 +1481,24 @@ public class BaseDAOGenerator implements DAOGenerator {
                 sb.append("List list = "); //$NON-NLS-1$
             }
 
+            String paging = sb.toString();
             sb.append(daoTemplate.getQueryForListMethod(sqlMapGenerator
                     .getSqlMapNamespace(table), sqlMapGenerator
                     .getSelectByExampleWithBLOBsStatementId(), "example")); //$NON-NLS-1$
             method.addBodyLine(sb.toString());
+            //charr 2008-08-22 分页的参数
+            //bugfixed: getSelectByExampleWithBLOBsStatementId写成了getSelectByExampleStatementId，导致调用了错误的sqlMap查询语句 (charr 20080826)
+            paging += daoTemplate.getQueryForListMethod(sqlMapGenerator
+                    .getSqlMapNamespace(table), sqlMapGenerator
+                    .getSelectByExampleWithBLOBsStatementId(), "example, skipResults, maxResults");
+            methodPaging.addBodyLine(paging);		//charr 2008-08-22
             method.addBodyLine("return list;"); //$NON-NLS-1$
+            methodPaging.addBodyLine("return list;"); //$NON-NLS-1$		//charr 2008-08-22
         }
 
         ArrayList answer = new ArrayList();
         answer.add(method);
+        answer.add(methodPaging);		//charr 2008-08-22
 
         return answer;
     }
@@ -1415,6 +1910,62 @@ public class BaseDAOGenerator implements DAOGenerator {
         method.setName("getRecord"); //$NON-NLS-1$
         method.addBodyLine("return record;"); //$NON-NLS-1$
         answer.addMethod(method);
+        
+        return answer;
+    }
+    
+    protected InnerClass getOrderByParms (IntrospectedTable introspectedTable,
+            CompilationUnit compilationUnit) {
+        FullyQualifiedTable table = introspectedTable.getTable();
+        
+        InnerClass answer = new InnerClass(
+                new FullyQualifiedJavaType("OrderByParms")); //$NON-NLS-1$
+        answer.setVisibility(JavaVisibility.PRIVATE);
+        answer.setModifierStatic(true);
+        abatorContext.getCommentGenerator().addClassComment(answer, table);
+        
+        Method method = new Method();
+        method.setConstructor(true);
+        method.setVisibility(JavaVisibility.PUBLIC);
+        method.setName(answer.getType().getShortName());
+        method.addParameter(
+                new Parameter(FullyQualifiedJavaType.getObjectInstance(),
+                        "record")); //$NON-NLS-1$
+        method.addParameter(
+                new Parameter(new FullyQualifiedJavaType("java.lang.String"),
+                        "orderBy")); //$NON-NLS-1$
+        method.addBodyLine("this.record = record;"); //$NON-NLS-1$
+        method.addBodyLine("this.orderByClause = orderBy;");
+        answer.addMethod(method);
+        
+        Field field = new Field();
+        field.setVisibility(JavaVisibility.PRIVATE);
+        field.setType(FullyQualifiedJavaType.getObjectInstance());
+        field.setName("record"); //$NON-NLS-1$
+        answer.addField(field);
+        
+        method = new Method();
+        method.setVisibility(JavaVisibility.PUBLIC);
+        method.setReturnType(FullyQualifiedJavaType.getObjectInstance());
+        method.setName("getRecord"); //$NON-NLS-1$
+        method.addBodyLine("return record;"); //$NON-NLS-1$
+        answer.addMethod(method);
+        
+
+        field = new Field();
+        field.setVisibility(JavaVisibility.PRIVATE);
+        field.setType(new FullyQualifiedJavaType("java.lang.String"));
+        field.setName("orderByClause");
+        answer.addField(field);
+        method= new Method();
+        method.setVisibility(JavaVisibility.PUBLIC);
+        method.setReturnType(new FullyQualifiedJavaType("java.lang.String"));
+        method.setName("getOrderByClause"); //$NON-NLS-1$
+        method.addBodyLine("return orderByClause;"); //$NON-NLS-1$
+        answer.addMethod(method);
+        
+        method= new Method();
+        
         
         return answer;
     }

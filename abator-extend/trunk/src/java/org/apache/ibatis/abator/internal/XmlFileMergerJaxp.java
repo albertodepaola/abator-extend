@@ -149,13 +149,14 @@ public class XmlFileMergerJaxp {
          return s;
     }
 
+    /** EXTEND: 增加自动生成的判断标识(charrgenerated_)，以避免覆盖合并时保留原有的charrgenerated语句 (charr 2008-08-23) */
     private static boolean isAnAbatorNode(Node node) {
         boolean rc = false;
 
         if (node != null && node.getNodeType() == Node.ELEMENT_NODE) {
             Element element = (Element) node;
             String id = element.getAttribute("id"); //$NON-NLS-1$
-            if (id != null && id.startsWith("abatorgenerated_")) { //$NON-NLS-1$
+            if (id != null && (id.startsWith("abatorgenerated_") || id.startsWith("charrgenerated_"))) { //$NON-NLS-1$
                 rc = true;
             }
         }

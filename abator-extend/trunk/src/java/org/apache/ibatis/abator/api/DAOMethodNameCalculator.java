@@ -16,6 +16,8 @@
 
 package org.apache.ibatis.abator.api;
 
+import java.util.List;
+
 /**
  * This interface is used to supply names for DAO methods.  Users
  * can provide different implementations if the supplied implementations
@@ -68,6 +70,14 @@ public interface DAOMethodNameCalculator {
      */
     String getSelectByPrimaryKeyMethodName(IntrospectedTable introspectedTable);
     
+    /** EXTEND: 根据外键查询的方法名 (charr 2008-08-22) */
+    String getQueryByForeignKeyMethodName(IntrospectedTable introspectedTable, List foreignKeyColumns);
+    String getCountByForeignKeyMethodName(IntrospectedTable introspectedTable, List foreignKeyColumns);
+    /** EXTEND: 根据非唯一索引查询的方法名 (charr 2008-08-22) */
+    String getQueryByNonUniqueIndexMethodName(IntrospectedTable introspectedTable, List indexColumns);
+    String getCountByNonUniqueIndexMethodName(IntrospectedTable introspectedTable, List indexColumns);
+    /** EXTEND: 根据唯一索引查询的方法名 (charr 2008-08-22) */
+    String getSelectByUniqueIndexMethodName(IntrospectedTable introspectedTable, List indexColumns);
     /**
      * Calculates and returns a name for the select by example method.
      * 

@@ -148,6 +148,20 @@ public class IntrospectedTableImpl implements IntrospectedTable {
         return new AggregatingIterator(columnDefinitions.getBaseColumns().iterator(),
                 columnDefinitions.getBLOBColumns().iterator());
     }
+    
+    /** EXTEND:实现了IntrospectedTable中增加的接口 (charr 20080823) */
+    public Iterator getForeignKeys(){
+//    	System.out.println("*** getForeignKeys " + columnDefinitions.getForeignKeysColumns().size());
+    	return columnDefinitions.getForeignKeysColumns().iterator();
+    }
+    public Iterator getUniqueIndices(){
+//    	System.out.println("*** getUniqueIndices " + columnDefinitions.getUniqueIndicesColumns().size());
+    	return columnDefinitions.getUniqueIndicesColumns().iterator();
+    }
+    public Iterator getNonUniqueIndices(){
+//    	System.out.println("*** getNonUniqueIndices " + columnDefinitions.getNonUniqueIndicesColumns().size());
+    	return columnDefinitions.getNonUniqueIndicesColumns().iterator();
+    }
 
     public String getTableConfigurationProperty(String property) {
         return tableConfiguration.getProperty(property);

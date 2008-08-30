@@ -46,6 +46,7 @@ public class AbatorRunner {
     private static final String CONTEXT_IDS = "-contextids"; //$NON-NLS-1$
     private static final String TABLES = "-tables"; //$NON-NLS-1$
 
+    /** READING: 生成器入口 (charr 2008-08-23) */
 	public static void main(String[] args) {
         Map arguments = parseCommandLine(args);
         

@@ -28,6 +28,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.ibatis.abator.api.FullyQualifiedTable;
+import org.apache.ibatis.abator.api.IntrospectedTable;
 import org.apache.ibatis.abator.api.JavaTypeResolver;
 import org.apache.ibatis.abator.api.dom.java.FullyQualifiedJavaType;
 import org.apache.ibatis.abator.config.AbatorContext;
@@ -42,6 +43,10 @@ import org.apache.ibatis.abator.internal.util.StringUtility;
 import org.apache.ibatis.abator.internal.util.messages.Messages;
 
 /**
+ * EXTEND: 增加了外键和索引的元数据提取 (charr 2008-08-22)
+ * 为了避免生成重复的方法（比如主键往往也是唯一键索引）
+ * 优先级定义如下：1、主键；2、索引；3、外键
+ * 在元数据提取的时候就进行相同列的过滤
  * 
  * @author Jeff Butler
  */
@@ -59,6 +64,98 @@ public class DatabaseIntrospector {
         this.databaseMetaData = databaseMetaData;
         this.javaTypeResolver = javaTypeResolver;
         this.warnings = warnings;
+    }
+    
+    private void calculateIndex(IntrospectedTableImpl introspectedTable){
+    	ResultSet rs = null;
+//    	System.out.println("=========calculateIndex===========");
+        try {
+            rs = databaseMetaData.getIndexInfo(introspectedTable.getTable().getCatalog(),
+                    introspectedTable.getTable().getSchema(),
+                    introspectedTable.getTable().getTableName(),
+                    false, false);
+        } catch (SQLException e) {
+            closeResultSet(rs);
+            warnings.add(Messages.getString("Warning.15")); //$NON-NLS-1$
+            return;
+        }
+
+        try {
+        	String lastIndexName = null;
+        	List index = new ArrayList();
+        	boolean lastNonUnique = true;
+            while (rs.next()) {
+                String indexName = rs.getString("INDEX_NAME"); //$NON-NLS-1$
+                String columnName = rs.getString("COLUMN_NAME");
+                boolean nonUnique = rs.getBoolean("NON_UNIQUE");
+                
+                if(!indexName.equals(lastIndexName)){
+                	if(!index.isEmpty()){
+                		if(lastNonUnique)
+                			introspectedTable.getColumnDefinitions().addNonUniqueIndex(index);
+                		else
+                			introspectedTable.getColumnDefinitions().addUniqueIndex(index);
+                	}
+                	lastNonUnique = nonUnique;
+                	lastIndexName = indexName;
+                	index = new ArrayList();
+                }
+                index.add(columnName);
+                
+//                System.out.println("=====================" + indexName + " : " + columnName);
+            }
+        	if(!index.isEmpty()){
+        		if(lastNonUnique)
+        			introspectedTable.getColumnDefinitions().addNonUniqueIndex(index);
+        		else
+        			introspectedTable.getColumnDefinitions().addUniqueIndex(index);
+        	}
+        } catch (SQLException e) {
+            // ignore the primary key if there's any error
+        } finally {
+            closeResultSet(rs);
+        }
+    }
+    private void calculateForeignKey(IntrospectedTableImpl introspectedTable){
+    	ResultSet rs = null;
+//    	System.out.println("=========calculateForeignKey===========");
+        try {
+            rs = databaseMetaData.getImportedKeys(introspectedTable.getTable().getCatalog(),
+                    introspectedTable.getTable().getSchema(),
+                    introspectedTable.getTable().getTableName());
+        } catch (SQLException e) {
+            closeResultSet(rs);
+            warnings.add(Messages.getString("Warning.15")); //$NON-NLS-1$
+            return;
+        }
+
+        try {
+        	String lastFkName = null;
+        	List fk = new ArrayList();
+            while (rs.next()) {
+            	String fkName = rs.getString("FK_NAME");
+                String fkColumnName = rs.getString("FKCOLUMN_NAME"); //$NON-NLS-1$
+                short keySeq = rs.getShort("KEY_SEQ");
+                
+                
+                if(!fkName.equals(lastFkName)){
+                	if(!fk.isEmpty())
+                		introspectedTable.getColumnDefinitions().addForeignKey(fk);
+                	lastFkName = fkName;
+                	fk = new ArrayList();
+                }
+                
+                fk.add(fkColumnName);
+                
+//                System.out.println("=====================" + fkName + " : " + fkColumnName + " : " + keySeq);
+            }
+        	if(!fk.isEmpty())
+        		introspectedTable.getColumnDefinitions().addForeignKey(fk);
+        } catch (SQLException e) {
+            // ignore the primary key if there's any error
+        } finally {
+            closeResultSet(rs);
+        }
     }
 
     private void calculatePrimaryKey(IntrospectedTableImpl introspectedTable) {
@@ -167,6 +264,9 @@ public class DatabaseIntrospector {
         while (iter.hasNext()) {
             IntrospectedTableImpl it = (IntrospectedTableImpl) iter.next();
             calculatePrimaryKey(it);
+
+            calculateIndex(it);
+            calculateForeignKey(it);
         }
         
         // now introspectedTables has all the columns from all the 
@@ -177,7 +277,6 @@ public class DatabaseIntrospector {
             IntrospectedTableImpl introspectedTable = (IntrospectedTableImpl) iter.next();
             
             ColumnDefinitions cds = introspectedTable.getColumnDefinitions();
-            
             if (!cds.hasAnyColumns()) {
                 // add warning that the table has no columns, remove from the list
                 warnings.add(Messages.getString("Warning.1", introspectedTable.getTable().toString())); //$NON-NLS-1$

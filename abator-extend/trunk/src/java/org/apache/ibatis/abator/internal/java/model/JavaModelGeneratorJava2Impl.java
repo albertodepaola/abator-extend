@@ -52,6 +52,7 @@ import org.apache.ibatis.abator.internal.util.messages.Messages;
 /**
  * This class supports the following properties:
  * 
+ * EXTEND: 增加了存放真实表名和字段名的静态变量（TABLE_NAME，FIELD_NAME_**）(charr 20080823)
  * <dl>
  * <dt>trimStrings
  * <dt>
@@ -171,6 +172,17 @@ public class JavaModelGeneratorJava2Impl implements JavaModelGenerator {
             topLevelClass.addImportedType(fqjt);
 
             String property = cd.getJavaProperty();
+            
+
+            // charr 2008-08-21 (start)
+            field = new Field();
+            field.setVisibility(JavaVisibility.PUBLIC);
+            field.setModifierStatic(true);
+            field.setType(new FullyQualifiedJavaType("java.lang.String"));
+            field.setName("FIELD_NAME_" + property.toUpperCase());
+            field.setInitializationString("\"" + cd.getActualColumnName() + "\"");
+            topLevelClass.addField(field);
+            // charr 2008-08-21 ( end )
 
             field = new Field();
             field.setVisibility(JavaVisibility.PRIVATE);
@@ -178,6 +190,7 @@ public class JavaModelGeneratorJava2Impl implements JavaModelGenerator {
             field.setName(property);
             commentGenerator.addFieldComment(field, table, cd.getActualColumnName());
             topLevelClass.addField(field);
+            
 
             method = new Method();
             method.setVisibility(JavaVisibility.PUBLIC);
@@ -299,6 +312,15 @@ public class JavaModelGeneratorJava2Impl implements JavaModelGenerator {
                     getRootClass(introspectedTable));
         }
 
+        // charr 2008-08-11
+        Field f = new Field();
+        f.setVisibility(JavaVisibility.PUBLIC);
+        f.setModifierStatic(true);
+        f.setType(new FullyQualifiedJavaType("java.lang.String"));
+        f.setName("TABLE_NAME");
+        f.setInitializationString("\"" + table.getTableName() + "\"");
+        answer.addField(f);
+        
         generateClassParts(table, introspectedTable.getBaseColumns(), answer,
                 getRootClass(introspectedTable));
 

@@ -93,6 +93,12 @@ public interface IntrospectedTable {
     
     boolean hasBLOBColumns();
     
+    /** EXTEND: 获取外键 (charr 2008-08-22) */
+    Iterator getForeignKeys();
+    /** EXTEND: 获取索引 (charr 2008-08-23) */
+    Iterator getUniqueIndices();
+    Iterator getNonUniqueIndices();
+    
     AbatorRules getRules();
     
     String getTableConfigurationProperty(String property);
