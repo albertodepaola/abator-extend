@@ -959,10 +959,10 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
                 parameterType = javaModelGenerator.getBaseRecordType(table);
             }
             
-            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
-                    parameterType.getFullyQualifiedName()));
-            elementCount.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
-                    parameterType.getFullyQualifiedName()));
+//            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+//                    parameterType.getFullyQualifiedName()));
+//            elementCount.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+//                    parameterType.getFullyQualifiedName()));
 
             abatorContext.getCommentGenerator().addComment(element);
             abatorContext.getCommentGenerator().addComment(elementCount);
@@ -1014,9 +1014,9 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
 
                 sb.append(cd.getAliasedEscapedColumnName());
                 sb.append(" = "); //$NON-NLS-1$
-                sb.append(cd.getIbatisFormattedParameterClause("record."));
-                element.addElement(new TextElement(sb.toString()));
-                elementCount.addElement(new TextElement(sb.toString()));
+//                sb.append(cd.getIbatisFormattedParameterClause("record."));
+                element.addElement(new TextElement(sb.toString() + cd.getIbatisFormattedParameterClause("record.")));
+                elementCount.addElement(new TextElement(sb.toString() + cd.getIbatisFormattedParameterClause()));
             }
             XmlElement isNotEmptyElement = new XmlElement("isNotEmpty"); //$NON-NLS-1$
             isNotEmptyElement.addAttribute(new Attribute("property", "orderByClause")); //$NON-NLS-1$ //$NON-NLS-2$
@@ -1066,10 +1066,10 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
                 parameterType = javaModelGenerator.getBaseRecordType(table);
             }
             
-            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
-                    parameterType.getFullyQualifiedName()));
-            elementCount.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
-                    parameterType.getFullyQualifiedName()));
+//            element.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+//                    parameterType.getFullyQualifiedName()));
+//            elementCount.addAttribute(new Attribute("parameterClass", //$NON-NLS-1$
+//                    parameterType.getFullyQualifiedName()));
 
             abatorContext.getCommentGenerator().addComment(element);
             abatorContext.getCommentGenerator().addComment(elementCount);
@@ -1121,9 +1121,9 @@ public class SqlMapGeneratorIterateImpl implements SqlMapGenerator {
 
                 sb.append(cd.getAliasedEscapedColumnName());
                 sb.append(" = "); //$NON-NLS-1$
-                sb.append(cd.getIbatisFormattedParameterClause("record."));
-                element.addElement(new TextElement(sb.toString()));
-                elementCount.addElement(new TextElement(sb.toString()));
+//                sb.append(cd.getIbatisFormattedParameterClause("record."));
+                element.addElement(new TextElement(sb.toString() + cd.getIbatisFormattedParameterClause("record.")));
+                elementCount.addElement(new TextElement(sb.toString() + cd.getIbatisFormattedParameterClause()));
             }
             XmlElement isNotEmptyElement = new XmlElement("isNotEmpty"); //$NON-NLS-1$
             isNotEmptyElement.addAttribute(new Attribute("property", "orderByClause")); //$NON-NLS-1$ //$NON-NLS-2$
