@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+
+<project name="abator-extend" default="usage" >
+	<property file="ant.properties"/>
+	<path id="path.lib.compile">
+		<fileset dir="${dir.lib}" includes="compile/**/*.jar" />
+	</path>
+	
+	<target name="usage">
+		<echo>
+		</echo>
+	</target>
+	
+	<target name="compile">
+		<mkdir dir="${dir.target}"/>
+		<mkdir dir="${dir.target.classes}"/>
+		
+	    <javac 
+	    	srcdir="${dir.src}/java"
+	    	includes="**/*.java"
+	    	destdir="${dir.target.classes}"
+	        debug="${compile.debug}" 
+	        source="${compile.sourcelevel}"
+	    	encoding="${compile.encoding}"
+	        deprecation="${compile.deprecation}">
+	        
+	        <classpath>
+	            <path refid="path.lib.compile"/>
+	        </classpath>
+	    </javac>
+		
+	</target>
+	
+	<target name="jar" depends="compile">
+		<delete file="${dir.target}/${ant.project.name}-${release.version}.jar"></delete>
+		<jar destfile="${dir.target}/${ant.project.name}-${release.version}.jar" basedir="${dir.target.classes}">
+			<manifest>
+				<attribute name="Main-Class" value="org.apache.ibatis.abator.api.AbatorRunner"/>
+			</manifest>
+		</jar>
+	</target>
+
+	<target name="backup">
+		<tstamp>
+			<format property="NOW" pattern="yyyyMMdd_HHmmss"/>
+		</tstamp>
+		<zip destfile="${dir.backup}/${ant.project.name}_${NOW}.zip" encoding="${compile.encoding}">
+			<fileset dir="${basedir}" excludes="/build/, /target/"></fileset>
+		</zip>
+	</target>
+	
+    <target name="javadoc">
+    	<mkdir dir="${dir.target}/docs"/>
+        <javadoc destdir="${dir.target}/docs" 
+        	access="public" author="true"  
+        	source="${compile.sourcelevel}" sourcepath="${dir.src}/java" encoding="${compile.encoding}" 
+        	splitindex="true" use="true" version="true">
+	        <classpath>
+	            <path refid="path.lib.compile"/>
+	        </classpath>
+    	</javadoc>
+    </target>
+	
+
+    <target name="clean">
+    	<delete dir="${dir.target}"></delete>
+	</target>
+</project>
